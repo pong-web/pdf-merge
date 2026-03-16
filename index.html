@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF_MERGE | 도면 병합 툴</title>
+    <title>PDF_MERGE | 도면 취합 툴</title>
     
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -33,6 +33,7 @@
         }
 
         .logo { font-size: 24px; font-weight: 800; color: var(--primary-color); letter-spacing: -1px; cursor: pointer; user-select: none; }
+
         .header-right { display: flex; align-items: center; gap: 12px; }
 
         .undo-header-btn {
@@ -81,19 +82,15 @@
         .view-options button.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
         .grid-col-select { display: none; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; }
 
-        #file-list { display: flex; flex-direction: column; gap: 8px; min-height: 200px; }
+        #file-list { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
 
         .file-item {
             background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
             padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; transition: 0.1s;
-            cursor: move; position: relative; user-select: none;
-            touch-action: none; /* 드래그 간섭 방지 */
+            cursor: grab; position: relative; user-select: none;
         }
-        .file-item.selected { border-color: var(--primary-color) !important; background-color: var(--primary-light) !important; box-shadow: 0 0 0 2px var(--primary-color); z-index: 5; }
-        
-        /* 드래그 중인 아이템 스타일 */
-        .sortable-drag { opacity: 0.9; background: #fff !important; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-        .sortable-ghost { opacity: 0.3; background: var(--primary-light) !important; border: 2px dashed var(--primary-color) !important; }
+        .file-item.selected { border-color: var(--primary-color); background-color: var(--primary-light); box-shadow: 0 0 0 2px var(--primary-color); z-index: 5; }
+        .sortable-ghost { opacity: 0.5; background: var(--primary-light) !important; border: 2px dashed var(--primary-color) !important; }
 
         .file-info { display: flex; align-items: center; gap: 15px; flex: 1; pointer-events: none; }
         .thumbnail-wrapper { width: 40px; height: 56px; background: #eee; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
@@ -117,7 +114,7 @@
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 15px; }
         .merge-btn { width: 100%; background: var(--primary-color); color: #fff; border: none; padding: 18px; font-size: 16px; font-weight: 700; border-radius: 8px; cursor: pointer; margin-top: 20px; }
 
-        #toast-popup { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px; display: none; font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); text-align: center; }
+        #toast-popup { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px; display: none; font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
@@ -177,17 +174,11 @@
 <div id="toast-popup"></div>
 
 <script>
-    // 페이지 로드 시 플러그인 장착
-    if (typeof Sortable !== 'undefined' && Sortable.MultiDrag) {
-        Sortable.mount(new Sortable.MultiDrag());
-    }
-
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     let uploadedFiles = [];
     let deletedStack = [];
     let lastSelectedIndex = -1;
 
-    // 드로잉 정렬 로직 (숫자 인식)
     function drawingSort(a, b) {
         const nameA = a.name.toLowerCase().replace(/\.pdf$/, '');
         const nameB = b.name.toLowerCase().replace(/\.pdf$/, '');
@@ -250,11 +241,9 @@
                 </div>
             `;
             
-            // 다중 선택 클릭 로직
             itemDiv.onclick = (e) => {
                 const currentIndex = parseInt(itemDiv.dataset.index);
                 const allItems = document.querySelectorAll('.file-item');
-
                 if (e.shiftKey && lastSelectedIndex !== -1) {
                     const start = Math.min(lastSelectedIndex, currentIndex);
                     const end = Math.max(lastSelectedIndex, currentIndex);
@@ -275,29 +264,7 @@
         });
         document.getElementById('total-pages').innerText = total;
         updateUndoButton();
-        initSortable(); // 목록 렌더링 후 드래그 다시 초기화
-    }
-
-    // 드래그 기능 초기화 함수
-    let sortableInstance;
-    function initSortable() {
-        const list = document.getElementById('file-list');
-        if (sortableInstance) sortableInstance.destroy();
-        
-        sortableInstance = new Sortable(list, {
-            multiDrag: true,
-            selectedClass: 'selected',
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            dragClass: 'sortable-drag',
-            fallbackTolerance: 3, // 작은 움직임은 무시
-            onEnd: function() {
-                const newOrder = Array.from(list.children).map(el => el.dataset.id);
-                uploadedFiles = newOrder.map(id => uploadedFiles.find(f => f.id === id));
-                document.getElementById('auto-sort').checked = false;
-                renderFileList();
-            }
-        });
+        updateSelectedCount();
     }
 
     function updateSelectedCount() {
@@ -329,22 +296,36 @@
             if (idx > -1) removedBatch.push({ data: uploadedFiles[idx], index: idx });
         });
 
-        const firstName = removedBatch[0].data.name;
+        if (removedBatch.length === 0) return;
+
+        // 팝업 메시지 구성
+        let msg = "";
+        if (removedBatch.length === 1) {
+            msg = `[${removedBatch[0].data.name}] 삭제됨`;
+        } else {
+            msg = `[${removedBatch[0].data.name}] 외 ${removedBatch.length - 1}건 삭제됨`;
+        }
+
         removedBatch.sort((a, b) => b.index - a.index).forEach(item => { uploadedFiles.splice(item.index, 1); });
         deletedStack.push(removedBatch);
         renderFileList();
-
-        const msg = removedBatch.length > 1 ? `${firstName} 외 ${removedBatch.length - 1}개 삭제됨` : `${firstName} 삭제됨`;
         showToast(msg);
     }
 
     function undoDelete() {
         if (deletedStack.length > 0) {
             const batch = deletedStack.pop();
-            const firstName = batch[0].data.name;
+            
+            // 팝업 메시지 구성
+            let msg = "";
+            if (batch.length === 1) {
+                msg = `[${batch[0].data.name}] 복원됨`;
+            } else {
+                msg = `[${batch[0].data.name}] 외 ${batch.length - 1}건 복원됨`;
+            }
+
             batch.sort((a, b) => a.index - b.index).forEach(item => { uploadedFiles.splice(item.index, 0, item.data); });
             renderFileList();
-            const msg = batch.length > 1 ? `${firstName} 외 ${batch.length - 1}개 복구됨` : `${firstName} 복구됨`;
             showToast(msg);
         }
     }
@@ -357,12 +338,10 @@
         btn.classList.toggle('active', count > 0);
     }
 
-    let toastTimer;
     function showToast(msg) {
         const toast = document.getElementById('toast-popup');
         toast.innerText = msg; toast.style.display = 'block';
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        setTimeout(() => { toast.style.display = 'none'; }, 2500);
     }
 
     function changeGridCols() {
@@ -371,6 +350,19 @@
         list.classList.remove('cols-2', 'cols-3', 'cols-4');
         list.classList.add(`cols-${colVal}`);
     }
+
+    new Sortable(document.getElementById('file-list'), {
+        multiDrag: true,
+        selectedClass: 'selected',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        onEnd: function() {
+            const newOrder = Array.from(document.getElementById('file-list').children).map(el => el.dataset.id);
+            uploadedFiles = newOrder.map(id => uploadedFiles.find(f => f.id === id));
+            document.getElementById('auto-sort').checked = false;
+            renderFileList();
+        }
+    });
 
     document.getElementById('merge-execute-btn').onclick = async () => {
         if (uploadedFiles.length === 0) return alert('파일을 업로드해주세요.');
