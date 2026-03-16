@@ -32,7 +32,13 @@
             display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;
         }
 
-        .logo { font-size: 24px; font-weight: 800; color: var(--primary-color); letter-spacing: -1px; }
+        /* [수정] 제목 클릭 시 커서 모양 변경 및 클릭 가능하게 설정 */
+        .logo { 
+            font-size: 24px; font-weight: 800; color: var(--primary-color); 
+            letter-spacing: -1px; cursor: pointer; user-select: none;
+            transition: opacity 0.2s;
+        }
+        .logo:hover { opacity: 0.7; }
 
         .header-right { display: flex; align-items: center; gap: 12px; }
 
@@ -147,7 +153,7 @@
 <body>
 
 <header>
-    <div class="logo">PDF_MERGE</div>
+    <div class="logo" onclick="window.location.reload()">PDF_MERGE</div>
     <div class="header-right">
         <button id="header-undo-btn" class="undo-header-btn" onclick="undoDelete()" disabled>
             <i class="fa-solid fa-rotate-left"></i> 되돌리기 (0)
@@ -310,7 +316,7 @@
             const last = deletedStack.pop();
             uploadedFiles.splice(last.index, 0, last.data);
             renderFileList();
-            showToast(`${last.data.name} 복구됨`); // [추가] 복구 알림 팝업
+            showToast(`${last.data.name} 복구됨`);
         }
     }
 
@@ -354,7 +360,6 @@
         }
     });
 
-    // [수정] PDF 병합 및 경로 선택 저장 로직
     document.getElementById('merge-execute-btn').onclick = async () => {
         if (uploadedFiles.length === 0) return alert('파일을 업로드해주세요.');
         const btn = document.getElementById('merge-execute-btn');
@@ -382,7 +387,6 @@
             let finalFileName = (document.getElementById('final-filename').value || '병합본');
             if (!finalFileName.toLowerCase().endsWith('.pdf')) finalFileName += '.pdf';
 
-            // 경로 선택 저장 시도 (File System Access API)
             if ('showSaveFilePicker' in window) {
                 try {
                     const handle = await window.showSaveFilePicker({
@@ -397,11 +401,9 @@
                     await writable.close();
                     showToast("저장이 완료되었습니다.");
                 } catch (pickerError) {
-                    // 사용자가 취소한 경우 등
                     console.log("Save cancelled or picker failed", pickerError);
                 }
             } else {
-                // 구형 브라우저 대응 (다운로드 폴더 자동 저장)
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
                 link.download = finalFileName;
