@@ -89,7 +89,6 @@
             padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; transition: 0.1s;
             cursor: grab; position: relative; user-select: none;
         }
-        /* 선택 및 드래그 하이라이트 */
         .file-item.selected { border-color: var(--primary-color); background-color: var(--primary-light); box-shadow: 0 0 0 2px var(--primary-color); z-index: 5; }
         .sortable-ghost { opacity: 0.5; background: var(--primary-light) !important; border: 2px dashed var(--primary-color) !important; }
 
@@ -115,7 +114,7 @@
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 15px; }
         .merge-btn { width: 100%; background: var(--primary-color); color: #fff; border: none; padding: 18px; font-size: 16px; font-weight: 700; border-radius: 8px; cursor: pointer; margin-top: 20px; }
 
-        #toast-popup { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px; display: none; font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        #toast-popup { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px; display: none; font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); text-align: center; }
     </style>
 </head>
 <body>
@@ -178,7 +177,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     let uploadedFiles = [];
     let deletedStack = [];
-    let lastSelectedIndex = -1; // Shift 선택을 위한 변수
+    let lastSelectedIndex = -1;
 
     function drawingSort(a, b) {
         const nameA = a.name.toLowerCase().replace(/\.pdf$/, '');
@@ -242,24 +241,20 @@
                 </div>
             `;
             
-            // 고급 다중 선택 로직 (Ctrl, Shift 대응)
             itemDiv.onclick = (e) => {
                 const currentIndex = parseInt(itemDiv.dataset.index);
                 const allItems = document.querySelectorAll('.file-item');
 
                 if (e.shiftKey && lastSelectedIndex !== -1) {
-                    // Shift: 범위 선택
                     const start = Math.min(lastSelectedIndex, currentIndex);
                     const end = Math.max(lastSelectedIndex, currentIndex);
                     allItems.forEach((el, idx) => {
                         if (idx >= start && idx <= end) el.classList.add('selected');
                     });
                 } else if (e.ctrlKey || e.metaKey) {
-                    // Ctrl/Cmd: 개별 토글 선택
                     itemDiv.classList.toggle('selected');
                     lastSelectedIndex = currentIndex;
                 } else {
-                    // 일반 클릭: 단일 선택
                     allItems.forEach(el => el.classList.remove('selected'));
                     itemDiv.classList.add('selected');
                     lastSelectedIndex = currentIndex;
@@ -291,27 +286,41 @@
         renderFileList();
     }
 
+    // [파일명 표시 보강] 삭제 시 이름 노출 로직
     function deleteFile(id) {
         const selectedEls = document.querySelectorAll('.file-item.selected');
         const targetIds = selectedEls.length > 0 && Array.from(selectedEls).some(el => el.dataset.id === id) 
             ? Array.from(selectedEls).map(el => el.dataset.id) : [id];
+        
         const removedBatch = [];
         targetIds.forEach(tid => {
             const idx = uploadedFiles.findIndex(f => f.id === tid);
             if (idx > -1) removedBatch.push({ data: uploadedFiles[idx], index: idx });
         });
+
+        const firstName = removedBatch[0].data.name;
         removedBatch.sort((a, b) => b.index - a.index).forEach(item => { uploadedFiles.splice(item.index, 1); });
         deletedStack.push(removedBatch);
         renderFileList();
-        showToast(targetIds.length > 1 ? `${targetIds.length}개 파일 일괄 삭제됨` : `파일 삭제됨`);
+
+        // 팝업 메시지 생성
+        const msg = removedBatch.length > 1 
+            ? `${firstName} 외 ${removedBatch.length - 1}개 삭제됨` 
+            : `${firstName} 삭제됨`;
+        showToast(msg);
     }
 
     function undoDelete() {
         if (deletedStack.length > 0) {
             const batch = deletedStack.pop();
+            const firstName = batch[0].data.name;
             batch.sort((a, b) => a.index - b.index).forEach(item => { uploadedFiles.splice(item.index, 0, item.data); });
             renderFileList();
-            showToast("복구 완료");
+            
+            const msg = batch.length > 1 
+                ? `${firstName} 외 ${batch.length - 1}개 복구됨` 
+                : `${firstName} 복구됨`;
+            showToast(msg);
         }
     }
 
@@ -323,10 +332,12 @@
         btn.classList.toggle('active', count > 0);
     }
 
+    let toastTimer;
     function showToast(msg) {
         const toast = document.getElementById('toast-popup');
         toast.innerText = msg; toast.style.display = 'block';
-        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
     }
 
     function changeGridCols() {
@@ -336,10 +347,7 @@
         list.classList.add(`cols-${colVal}`);
     }
 
-    // SortableJS 초기화 (MultiDrag 지원 및 하이라이트 고도화)
     new Sortable(document.getElementById('file-list'), {
-        multiDrag: true,
-        selectedClass: 'selected',
         animation: 150,
         ghostClass: 'sortable-ghost',
         onEnd: function() {
