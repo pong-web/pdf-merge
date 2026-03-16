@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF_MERGE | 도면 취합 툴</title>
+    <title>PDF_MERGE | PDF 병합 툴</title>
     
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -32,13 +32,10 @@
             display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;
         }
 
-        /* [수정] 제목 클릭 시 커서 모양 변경 및 클릭 가능하게 설정 */
         .logo { 
             font-size: 24px; font-weight: 800; color: var(--primary-color); 
             letter-spacing: -1px; cursor: pointer; user-select: none;
-            transition: opacity 0.2s;
         }
-        .logo:hover { opacity: 0.7; }
 
         .header-right { display: flex; align-items: center; gap: 12px; }
 
@@ -48,9 +45,6 @@
             display: flex; align-items: center; gap: 6px;
         }
         .undo-header-btn.active { color: var(--primary-color); border-color: var(--primary-color); background: var(--primary-light); }
-        .undo-header-btn.active:hover { background: var(--primary-color); color: #fff; }
-        .undo-header-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
         .status-badge { font-size: 13px; font-weight: 600; padding: 6px 16px; background: #eee; border-radius: 20px; }
         .status-badge b { color: var(--primary-color); }
 
@@ -82,72 +76,60 @@
         }
 
         .left-controls { display: flex; align-items: center; gap: 15px; }
-        
-        .view-options { display: flex; gap: 5px; }
         .view-options button {
             background: #F1F3F5; border: 1px solid #E9ECEF; padding: 8px 16px; border-radius: 6px;
             cursor: pointer; font-weight: 600; font-size: 13px;
         }
         .view-options button.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .grid-col-select { display: none; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; }
 
-        .grid-col-select {
-            display: none;
-            padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border-color);
-            font-size: 13px; font-weight: 600; cursor: pointer; outline: none; background-color: #fff;
-        }
-
-        #file-list { display: flex; flex-direction: column; gap: 8px; }
+        #file-list { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
 
         .file-item {
             background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
             padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; transition: 0.2s;
+            cursor: grab; position: relative;
         }
-        .file-item:hover { border-color: var(--primary-color); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .file-item:hover { border-color: #adb5bd; }
 
-        .file-info { display: flex; align-items: center; gap: 15px; overflow: hidden; flex: 1; margin-right: 20px; }
-        .thumbnail-wrapper { 
-            display: flex; align-items: center; justify-content: center; 
-            background: #eee; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;
-            width: 40px; height: 56px; flex-shrink: 0;
+        /* [추가] 다중 선택 시 스타일 */
+        .file-item.selected {
+            border-color: var(--primary-color);
+            background-color: var(--primary-light);
+            box-shadow: 0 0 0 2px var(--primary-color);
+            z-index: 5;
         }
+
+        /* [추가] 드래그 시 삽입 위치 하이라이트 */
+        .sortable-ghost {
+            opacity: 0.5;
+            background: var(--primary-light) !important;
+            border: 2px dashed var(--primary-color) !important;
+        }
+
+        .file-info { display: flex; align-items: center; gap: 15px; flex: 1; pointer-events: none; }
+        .thumbnail-wrapper { width: 40px; height: 56px; background: #eee; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
         .thumbnail { width: 100%; height: 100%; object-fit: cover; }
-
-        .file-name { font-weight: 500; font-size: 14px; white-space: normal; word-break: break-all; line-height: 1.4; color: var(--text-main); }
+        .file-name { font-weight: 500; font-size: 14px; white-space: normal; word-break: break-all; }
         .file-meta { font-size: 12px; color: var(--text-sub); margin-top: 4px; display: block; }
 
         #file-list.grid { display: grid; gap: 20px; }
         #file-list.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
         #file-list.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
         #file-list.grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
-
-        .grid .file-item { flex-direction: column; padding: 20px; text-align: center; height: auto; }
+        .grid .file-item { flex-direction: column; padding: 20px; text-align: center; }
         .grid .thumbnail-wrapper { width: 100%; height: 260px; margin-bottom: 12px; }
-        .grid .file-info { flex-direction: column; width: 100%; margin-right: 0; }
-        .grid .file-name { 
-            max-width: 100%; white-space: normal; height: auto; 
-            line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; 
-            font-size: 15px; margin-bottom: 5px; overflow: hidden;
-        }
-        .grid .file-actions { margin-top: 15px; justify-content: center; width: 100%; }
+        .grid .file-info { flex-direction: column; width: 100%; }
 
-        .action-btn { background: #fff; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--text-sub); font-size: 13px; white-space: nowrap; }
+        .action-btn { background: #fff; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--text-sub); font-size: 13px; }
         .action-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
 
         .bottom-panel { margin-top: 30px; background: #fff; padding: 30px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         label { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: block; }
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 15px; }
+        .merge-btn { width: 100%; background: var(--primary-color); color: #fff; border: none; padding: 18px; font-size: 16px; font-weight: 700; border-radius: 8px; cursor: pointer; margin-top: 20px; }
 
-        .merge-btn {
-            width: 100%; background: var(--primary-color); color: #fff; border: none;
-            padding: 18px; font-size: 16px; font-weight: 700; border-radius: 8px; cursor: pointer; margin-top: 20px;
-        }
-
-        #toast-popup {
-            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px;
-            display: none; align-items: center; justify-content: center; font-size: 14px; z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
+        #toast-popup { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px; display: none; font-size: 14px; z-index: 1000; }
     </style>
 </head>
 <body>
@@ -164,10 +146,7 @@
 
 <main>
     <div class="upload-container" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        <div id="upload-loader">
-            <div class="spinner"></div>
-            <p style="font-weight: 600; color: var(--primary-color);">파일 분석 중...</p>
-        </div>
+        <div id="upload-loader"><div class="spinner"></div><p style="font-weight:600; color:var(--primary-color);">파일 분석 중...</p></div>
         <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
         <h3>도면 파일을 업로드하세요</h3>
         <p style="color: var(--text-sub); font-size: 14px;">PDF 파일을 드래그하거나 클릭 (폴더 지원)</p>
@@ -202,11 +181,10 @@
     </div>
 </main>
 
-<div id="toast-popup">메시지 내용</div>
+<div id="toast-popup"></div>
 
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    
     let uploadedFiles = [];
     let deletedStack = [];
 
@@ -215,32 +193,23 @@
         const nameB = b.name.toLowerCase().replace(/\.pdf$/, '');
         const partsA = nameA.match(/[0-9]+|[^0-9]+/g) || [];
         const partsB = nameB.match(/[0-9]+|[^0-9]+/g) || [];
-        const len = Math.max(partsA.length, partsB.length);
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
             if (partsA[i] === undefined) return -1;
             if (partsB[i] === undefined) return 1;
-            const pA = partsA[i];
-            const pB = partsB[i];
-            const isNumA = /^[0-9]+$/.test(pA);
-            const isNumB = /^[0-9]+$/.test(pB);
+            const pA = partsA[i], pB = partsB[i];
+            const isNumA = /^[0-9]+$/.test(pA), isNumB = /^[0-9]+$/.test(pB);
             if (isNumA && isNumB) {
-                const nA = parseInt(pA, 10);
-                const nB = parseInt(pB, 10);
+                const nA = parseInt(pA, 10), nB = parseInt(pB, 10);
                 if (nA !== nB) return nA - nB;
-            } else if (pA !== pB) {
-                return pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
-            }
+            } else if (pA !== pB) return pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
         }
         return 0;
     }
 
-    function sortFiles() { uploadedFiles.sort(drawingSort); }
-
     async function handleFiles(files) {
         const pdfFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
         if (pdfFiles.length === 0) return;
-        const loader = document.getElementById('upload-loader');
-        loader.style.display = 'flex';
+        document.getElementById('upload-loader').style.display = 'flex';
         for (let file of pdfFiles) {
             const id = Math.random().toString(36).substr(2, 9);
             try {
@@ -250,20 +219,14 @@
                 const viewport = page.getViewport({scale: 0.3});
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
+                canvas.height = viewport.height; canvas.width = viewport.width;
                 await page.render({canvasContext: context, viewport: viewport}).promise;
-                uploadedFiles.push({
-                    id, file, name: file.name,
-                    pageCount: pdfDoc.numPages,
-                    rotation: 0,
-                    thumbnail: canvas.toDataURL('image/jpeg', 0.8)
-                });
+                uploadedFiles.push({ id, file, name: file.name, pageCount: pdfDoc.numPages, rotation: 0, thumbnail: canvas.toDataURL('image/jpeg', 0.8) });
             } catch (e) { console.error(e); }
         }
-        if (document.getElementById('auto-sort').checked) sortFiles();
+        if (document.getElementById('auto-sort').checked) uploadedFiles.sort(drawingSort);
         renderFileList();
-        loader.style.display = 'none';
+        document.getElementById('upload-loader').style.display = 'none';
     }
 
     function renderFileList() {
@@ -278,13 +241,10 @@
             itemDiv.innerHTML = `
                 <div class="file-info">
                     <div class="thumbnail-wrapper"><img src="${item.thumbnail}" class="thumbnail" style="transform: rotate(${item.rotation}deg)"></div>
-                    <div>
-                        <div class="file-name" title="${item.name}">${item.name}</div>
-                        <span class="file-meta">${item.pageCount}p | 회전: ${item.rotation}°</span>
-                    </div>
+                    <div><div class="file-name">${item.name}</div><span class="file-meta">${item.pageCount}p | 회전: ${item.rotation}°</span></div>
                 </div>
                 <div class="file-actions">
-                    <button class="action-btn" onclick="event.stopPropagation(); rotateFile('${item.id}')"><i class="fa-solid fa-rotate"></i> 회전</button>
+                    <button class="action-btn" onclick="event.stopPropagation(); rotateFile('${item.id}')"><i class="fa-solid fa-rotate"></i></button>
                     <button class="action-btn" style="color:var(--danger-color)" onclick="event.stopPropagation(); deleteFile('${item.id}')"><i class="fa-solid fa-trash"></i></button>
                 </div>
             `;
@@ -301,45 +261,52 @@
     }
 
     function deleteFile(id) {
-        const index = uploadedFiles.findIndex(f => f.id === id);
-        if (index > -1) {
-            const fileName = uploadedFiles[index].name;
-            deletedStack.push({ data: uploadedFiles[index], index: index });
-            uploadedFiles.splice(index, 1);
-            renderFileList();
-            showToast(`${fileName} 삭제됨`);
-        }
+        // 선택된 항목이 있고 그 중 하나가 현재 삭제 대상인 경우 다중 삭제 진행
+        const selectedIds = Array.from(document.querySelectorAll('.file-item.selected')).map(el => el.dataset.id);
+        const targetIds = selectedIds.includes(id) ? selectedIds : [id];
+        
+        const removedItems = [];
+        targetIds.forEach(tid => {
+            const index = uploadedFiles.findIndex(f => f.id === tid);
+            if (index > -1) {
+                removedItems.push({ data: uploadedFiles[index], index });
+            }
+        });
+
+        // 인덱스 역순으로 실제 배열에서 제거 (순서 꼬임 방지)
+        removedItems.sort((a, b) => b.index - a.index).forEach(item => {
+            uploadedFiles.splice(item.index, 1);
+        });
+
+        deletedStack.push(removedItems); // 묶음으로 스택에 저장
+        renderFileList();
+        showToast(targetIds.length > 1 ? `${targetIds.length}개 파일 삭제됨` : `${removedItems[0].data.name} 삭제됨`);
     }
 
     function undoDelete() {
         if (deletedStack.length > 0) {
-            const last = deletedStack.pop();
-            uploadedFiles.splice(last.index, 0, last.data);
+            const lastRemovedBatch = deletedStack.pop();
+            // 원래 인덱스 순서대로 복구
+            lastRemovedBatch.sort((a, b) => a.index - b.index).forEach(item => {
+                uploadedFiles.splice(item.index, 0, item.data);
+            });
             renderFileList();
-            showToast(`${last.data.name} 복구됨`);
+            showToast("복구 완료");
         }
     }
 
     function updateUndoButton() {
-        const undoBtn = document.getElementById('header-undo-btn');
+        const btn = document.getElementById('header-undo-btn');
         const count = deletedStack.length;
-        undoBtn.innerHTML = `<i class="fa-solid fa-rotate-left"></i> 되돌리기 (${count})`;
-        if (count > 0) {
-            undoBtn.disabled = false;
-            undoBtn.classList.add('active');
-        } else {
-            undoBtn.disabled = true;
-            undoBtn.classList.remove('active');
-        }
+        btn.innerHTML = `<i class="fa-solid fa-rotate-left"></i> 되돌리기 (${count})`;
+        btn.disabled = count === 0;
+        btn.classList.toggle('active', count > 0);
     }
 
-    let toastTimer;
-    function showToast(message) {
+    function showToast(msg) {
         const toast = document.getElementById('toast-popup');
-        toast.innerText = message;
-        toast.style.display = 'block';
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        toast.innerText = msg; toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3000);
     }
 
     function changeGridCols() {
@@ -349,10 +316,14 @@
         list.classList.add(`cols-${colVal}`);
     }
 
+    // SortableJS 설정 (MultiDrag 활성화)
     new Sortable(document.getElementById('file-list'), {
+        multiDrag: true,
+        selectedClass: 'selected',
         animation: 150,
-        handle: '.file-info',
-        onEnd: () => {
+        ghostClass: 'sortable-ghost', // 드래그 시 위치 하이라이트
+        forceFallback: false,
+        onEnd: function(evt) {
             const newOrder = Array.from(document.getElementById('file-list').children).map(el => el.dataset.id);
             uploadedFiles = newOrder.map(id => uploadedFiles.find(f => f.id === id));
             document.getElementById('auto-sort').checked = false;
@@ -364,9 +335,7 @@
         if (uploadedFiles.length === 0) return alert('파일을 업로드해주세요.');
         const btn = document.getElementById('merge-execute-btn');
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> 병합 중...'; 
-        btn.disabled = true;
-
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> 병합 중...'; btn.disabled = true;
         try {
             const mergedPdf = await PDFLib.PDFDocument.create();
             for (const item of uploadedFiles) {
@@ -374,48 +343,23 @@
                 const pdf = await PDFLib.PDFDocument.load(bytes);
                 const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
                 pages.forEach(page => {
-                    if (item.rotation !== 0) {
-                        const currentRotation = page.getRotation().angle;
-                        page.setRotation(PDFLib.degrees(currentRotation + item.rotation));
-                    }
+                    if (item.rotation !== 0) page.setRotation(PDFLib.degrees(page.getRotation().angle + item.rotation));
                     mergedPdf.addPage(page);
                 });
             }
             const bytes = await mergedPdf.save();
             const blob = new Blob([bytes], { type: 'application/pdf' });
-            
-            let finalFileName = (document.getElementById('final-filename').value || '병합본');
-            if (!finalFileName.toLowerCase().endsWith('.pdf')) finalFileName += '.pdf';
-
+            let finalFileName = (document.getElementById('final-filename').value || '병합본') + '.pdf';
             if ('showSaveFilePicker' in window) {
-                try {
-                    const handle = await window.showSaveFilePicker({
-                        suggestedName: finalFileName,
-                        types: [{
-                            description: 'PDF Document',
-                            accept: {'application/pdf': ['.pdf']},
-                        }],
-                    });
-                    const writable = await handle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                    showToast("저장이 완료되었습니다.");
-                } catch (pickerError) {
-                    console.log("Save cancelled or picker failed", pickerError);
-                }
+                const handle = await window.showSaveFilePicker({ suggestedName: finalFileName, types: [{ description: 'PDF', accept: {'application/pdf': ['.pdf']}}]});
+                const writable = await handle.createWritable();
+                await writable.write(blob); await writable.close();
+                showToast("저장 완료");
             } else {
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = finalFileName;
-                link.click();
+                const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = finalFileName; link.click();
             }
-        } catch (e) { 
-            console.error(e);
-            alert('오류 발생: ' + e.message); 
-        } finally {
-            btn.innerHTML = originalText; 
-            btn.disabled = false;
-        }
+        } catch (e) { console.error(e); }
+        btn.innerHTML = originalText; btn.disabled = false;
     };
 
     document.getElementById('list-view-btn').onclick = () => {
@@ -434,8 +378,7 @@
 
     document.getElementById('file-input').onchange = (e) => handleFiles(e.target.files);
     document.getElementById('folder-input').onchange = (e) => handleFiles(e.target.files);
-    document.getElementById('auto-sort').onchange = (e) => { if(e.target.checked) { sortFiles(); renderFileList(); } };
-
+    document.getElementById('auto-sort').onchange = (e) => { if(e.target.checked) { uploadedFiles.sort(drawingSort); renderFileList(); } };
     const dz = document.getElementById('drop-zone');
     dz.ondragover = (e) => { e.preventDefault(); dz.style.background = "var(--primary-light)"; };
     dz.ondragleave = () => dz.style.background = "#fff";
