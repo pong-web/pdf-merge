@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF_MERGE | PDF 병합 툴</title>
+    <title>PDF_MERGE | 도면 취합 툴</title>
     
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -32,10 +32,7 @@
             display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;
         }
 
-        .logo { 
-            font-size: 24px; font-weight: 800; color: var(--primary-color); 
-            letter-spacing: -1px; cursor: pointer; user-select: none;
-        }
+        .logo { font-size: 24px; font-weight: 800; color: var(--primary-color); letter-spacing: -1px; cursor: pointer; user-select: none; }
 
         .header-right { display: flex; align-items: center; gap: 12px; }
 
@@ -45,6 +42,8 @@
             display: flex; align-items: center; gap: 6px;
         }
         .undo-header-btn.active { color: var(--primary-color); border-color: var(--primary-color); background: var(--primary-light); }
+        .undo-header-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
         .status-badge { font-size: 13px; font-weight: 600; padding: 6px 16px; background: #eee; border-radius: 20px; }
         .status-badge b { color: var(--primary-color); }
 
@@ -85,27 +84,14 @@
 
         #file-list { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
 
+        /* 파일 아이템 스타일 */
         .file-item {
             background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
             padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; transition: 0.2s;
-            cursor: grab; position: relative;
+            cursor: grab; position: relative; user-select: none;
         }
-        .file-item:hover { border-color: #adb5bd; }
-
-        /* [추가] 다중 선택 시 스타일 */
-        .file-item.selected {
-            border-color: var(--primary-color);
-            background-color: var(--primary-light);
-            box-shadow: 0 0 0 2px var(--primary-color);
-            z-index: 5;
-        }
-
-        /* [추가] 드래그 시 삽입 위치 하이라이트 */
-        .sortable-ghost {
-            opacity: 0.5;
-            background: var(--primary-light) !important;
-            border: 2px dashed var(--primary-color) !important;
-        }
+        .file-item.selected { border-color: var(--primary-color); background-color: var(--primary-light); box-shadow: 0 0 0 2px var(--primary-color); z-index: 5; }
+        .sortable-ghost { opacity: 0.5; background: var(--primary-light) !important; border: 2px dashed var(--primary-color) !important; }
 
         .file-info { display: flex; align-items: center; gap: 15px; flex: 1; pointer-events: none; }
         .thumbnail-wrapper { width: 40px; height: 56px; background: #eee; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
@@ -121,7 +107,7 @@
         .grid .thumbnail-wrapper { width: 100%; height: 260px; margin-bottom: 12px; }
         .grid .file-info { flex-direction: column; width: 100%; }
 
-        .action-btn { background: #fff; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--text-sub); font-size: 13px; }
+        .action-btn { background: #fff; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--text-sub); font-size: 13px; position: relative; z-index: 10; }
         .action-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
 
         .bottom-panel { margin-top: 30px; background: #fff; padding: 30px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
@@ -129,7 +115,7 @@
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 15px; }
         .merge-btn { width: 100%; background: var(--primary-color); color: #fff; border: none; padding: 18px; font-size: 16px; font-weight: 700; border-radius: 8px; cursor: pointer; margin-top: 20px; }
 
-        #toast-popup { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px; display: none; font-size: 14px; z-index: 1000; }
+        #toast-popup { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 24px; border-radius: 8px; display: none; font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
@@ -137,6 +123,7 @@
 <header>
     <div class="logo" onclick="window.location.reload()">PDF_MERGE</div>
     <div class="header-right">
+        <span id="selected-count" style="font-size: 12px; color: var(--primary-color); font-weight: 700; display: none;">0개 선택됨</span>
         <button id="header-undo-btn" class="undo-header-btn" onclick="undoDelete()" disabled>
             <i class="fa-solid fa-rotate-left"></i> 되돌리기 (0)
         </button>
@@ -145,13 +132,17 @@
 </header>
 
 <main>
-    <div class="upload-container" id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <div class="upload-container" id="drop-zone">
         <div id="upload-loader"><div class="spinner"></div><p style="font-weight:600; color:var(--primary-color);">파일 분석 중...</p></div>
         <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
         <h3>도면 파일을 업로드하세요</h3>
-        <p style="color: var(--text-sub); font-size: 14px;">PDF 파일을 드래그하거나 클릭 (폴더 지원)</p>
+        <p style="color: var(--text-sub); font-size: 14px;">드래그 앤 드롭 또는 아래 버튼 선택</p>
+        <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+            <button class="action-btn" onclick="document.getElementById('file-input').click()"><i class="fa-solid fa-file"></i> 파일 선택</button>
+            <button class="action-btn" onclick="document.getElementById('folder-input').click()"><i class="fa-solid fa-folder-open"></i> 폴더 선택</button>
+        </div>
         <input type="file" id="file-input" multiple accept=".pdf" hidden>
-        <input type="file" id="folder-input" webkitdirectory hidden>
+        <input type="file" id="folder-input" webkitdirectory directory hidden>
     </div>
 
     <div class="controls-bar">
@@ -177,7 +168,7 @@
     <div class="bottom-panel">
         <label>최종 파일명</label>
         <input type="text" id="final-filename" placeholder="EX) 현장번호_실시/허가도서_분류">
-        <button class="merge-btn" id="merge-execute-btn">PDF 병합 및 다운로드</button>
+        <button class="merge-btn" id="merge-execute-btn">PDF 병합 및 저장</button>
     </div>
 </main>
 
@@ -248,46 +239,77 @@
                     <button class="action-btn" style="color:var(--danger-color)" onclick="event.stopPropagation(); deleteFile('${item.id}')"><i class="fa-solid fa-trash"></i></button>
                 </div>
             `;
+            // 클릭 시 선택 기능 (Shift 다중 선택 지원)
+            itemDiv.onclick = (e) => {
+                if (e.shiftKey) {
+                    toggleSelect(itemDiv);
+                } else {
+                    document.querySelectorAll('.file-item').forEach(el => el.classList.remove('selected'));
+                    itemDiv.classList.add('selected');
+                }
+                updateSelectedCount();
+            };
             list.appendChild(itemDiv);
         });
         document.getElementById('total-pages').innerText = total;
         updateUndoButton();
+        updateSelectedCount();
+    }
+
+    function toggleSelect(el) { el.classList.toggle('selected'); }
+
+    function updateSelectedCount() {
+        const count = document.querySelectorAll('.file-item.selected').length;
+        const badge = document.getElementById('selected-count');
+        if (count > 1) {
+            badge.innerText = `${count}개 선택됨`;
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 
     function rotateFile(id) {
-        const item = uploadedFiles.find(f => f.id === id);
-        item.rotation = (item.rotation + 90) % 360;
+        const selectedEls = document.querySelectorAll('.file-item.selected');
+        const targetIds = selectedEls.length > 0 && Array.from(selectedEls).some(el => el.dataset.id === id) 
+            ? Array.from(selectedEls).map(el => el.dataset.id) 
+            : [id];
+        
+        targetIds.forEach(tid => {
+            const item = uploadedFiles.find(f => f.id === tid);
+            if(item) item.rotation = (item.rotation + 90) % 360;
+        });
         renderFileList();
     }
 
     function deleteFile(id) {
-        // 선택된 항목이 있고 그 중 하나가 현재 삭제 대상인 경우 다중 삭제 진행
-        const selectedIds = Array.from(document.querySelectorAll('.file-item.selected')).map(el => el.dataset.id);
-        const targetIds = selectedIds.includes(id) ? selectedIds : [id];
+        const selectedEls = document.querySelectorAll('.file-item.selected');
+        const targetIds = selectedEls.length > 0 && Array.from(selectedEls).some(el => el.dataset.id === id) 
+            ? Array.from(selectedEls).map(el => el.dataset.id) 
+            : [id];
         
-        const removedItems = [];
+        const removedBatch = [];
         targetIds.forEach(tid => {
-            const index = uploadedFiles.findIndex(f => f.id === tid);
-            if (index > -1) {
-                removedItems.push({ data: uploadedFiles[index], index });
+            const idx = uploadedFiles.findIndex(f => f.id === tid);
+            if (idx > -1) {
+                removedBatch.push({ data: uploadedFiles[idx], index: idx });
             }
         });
 
-        // 인덱스 역순으로 실제 배열에서 제거 (순서 꼬임 방지)
-        removedItems.sort((a, b) => b.index - a.index).forEach(item => {
+        // 실제 삭제 (인덱스 역순으로 처리해야 꼬이지 않음)
+        removedBatch.sort((a, b) => b.index - a.index).forEach(item => {
             uploadedFiles.splice(item.index, 1);
         });
 
-        deletedStack.push(removedItems); // 묶음으로 스택에 저장
+        deletedStack.push(removedBatch);
         renderFileList();
-        showToast(targetIds.length > 1 ? `${targetIds.length}개 파일 삭제됨` : `${removedItems[0].data.name} 삭제됨`);
+        showToast(targetIds.length > 1 ? `${targetIds.length}개 파일 일괄 삭제됨` : `파일 삭제됨`);
     }
 
     function undoDelete() {
         if (deletedStack.length > 0) {
-            const lastRemovedBatch = deletedStack.pop();
-            // 원래 인덱스 순서대로 복구
-            lastRemovedBatch.sort((a, b) => a.index - b.index).forEach(item => {
+            const batch = deletedStack.pop();
+            batch.sort((a, b) => a.index - b.index).forEach(item => {
                 uploadedFiles.splice(item.index, 0, item.data);
             });
             renderFileList();
@@ -316,14 +338,11 @@
         list.classList.add(`cols-${colVal}`);
     }
 
-    // SortableJS 설정 (MultiDrag 활성화)
+    // SortableJS 초기화
     new Sortable(document.getElementById('file-list'), {
-        multiDrag: true,
-        selectedClass: 'selected',
         animation: 150,
-        ghostClass: 'sortable-ghost', // 드래그 시 위치 하이라이트
-        forceFallback: false,
-        onEnd: function(evt) {
+        ghostClass: 'sortable-ghost',
+        onEnd: function() {
             const newOrder = Array.from(document.getElementById('file-list').children).map(el => el.dataset.id);
             uploadedFiles = newOrder.map(id => uploadedFiles.find(f => f.id === id));
             document.getElementById('auto-sort').checked = false;
@@ -378,11 +397,13 @@
 
     document.getElementById('file-input').onchange = (e) => handleFiles(e.target.files);
     document.getElementById('folder-input').onchange = (e) => handleFiles(e.target.files);
-    document.getElementById('auto-sort').onchange = (e) => { if(e.target.checked) { uploadedFiles.sort(drawingSort); renderFileList(); } };
+    
     const dz = document.getElementById('drop-zone');
     dz.ondragover = (e) => { e.preventDefault(); dz.style.background = "var(--primary-light)"; };
     dz.ondragleave = () => dz.style.background = "#fff";
     dz.ondrop = (e) => { e.preventDefault(); dz.style.background = "#fff"; handleFiles(e.dataTransfer.files); };
+    
+    document.getElementById('auto-sort').onchange = (e) => { if(e.target.checked) { uploadedFiles.sort(drawingSort); renderFileList(); } };
 </script>
 </body>
 </html>
