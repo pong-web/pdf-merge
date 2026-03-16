@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF_MERGE | 도면 취합 툴</title>
+    <title>PDF_MERGE | 도면 병합 툴</title>
     
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -33,7 +33,6 @@
         }
 
         .logo { font-size: 24px; font-weight: 800; color: var(--primary-color); letter-spacing: -1px; cursor: pointer; user-select: none; }
-
         .header-right { display: flex; align-items: center; gap: 12px; }
 
         .undo-header-btn {
@@ -82,15 +81,19 @@
         .view-options button.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
         .grid-col-select { display: none; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; }
 
-        #file-list { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
+        #file-list { display: flex; flex-direction: column; gap: 8px; min-height: 200px; }
 
         .file-item {
             background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
             padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; transition: 0.1s;
-            cursor: grab; position: relative; user-select: none;
+            cursor: move; position: relative; user-select: none;
+            touch-action: none; /* 드래그 간섭 방지 */
         }
         .file-item.selected { border-color: var(--primary-color) !important; background-color: var(--primary-light) !important; box-shadow: 0 0 0 2px var(--primary-color); z-index: 5; }
-        .sortable-ghost { opacity: 0.5; background: var(--primary-light) !important; border: 2px dashed var(--primary-color) !important; }
+        
+        /* 드래그 중인 아이템 스타일 */
+        .sortable-drag { opacity: 0.9; background: #fff !important; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .sortable-ghost { opacity: 0.3; background: var(--primary-light) !important; border: 2px dashed var(--primary-color) !important; }
 
         .file-info { display: flex; align-items: center; gap: 15px; flex: 1; pointer-events: none; }
         .thumbnail-wrapper { width: 40px; height: 56px; background: #eee; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
@@ -174,14 +177,17 @@
 <div id="toast-popup"></div>
 
 <script>
-    // MultiDrag 플러그인 활성화
-    Sortable.mount(new MultiDrag());
+    // 페이지 로드 시 플러그인 장착
+    if (typeof Sortable !== 'undefined' && Sortable.MultiDrag) {
+        Sortable.mount(new Sortable.MultiDrag());
+    }
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     let uploadedFiles = [];
     let deletedStack = [];
     let lastSelectedIndex = -1;
 
+    // 드로잉 정렬 로직 (숫자 인식)
     function drawingSort(a, b) {
         const nameA = a.name.toLowerCase().replace(/\.pdf$/, '');
         const nameB = b.name.toLowerCase().replace(/\.pdf$/, '');
@@ -244,7 +250,7 @@
                 </div>
             `;
             
-            // Shift / Ctrl 다중 선택 로직
+            // 다중 선택 클릭 로직
             itemDiv.onclick = (e) => {
                 const currentIndex = parseInt(itemDiv.dataset.index);
                 const allItems = document.querySelectorAll('.file-item');
@@ -253,15 +259,14 @@
                     const start = Math.min(lastSelectedIndex, currentIndex);
                     const end = Math.max(lastSelectedIndex, currentIndex);
                     allItems.forEach((el, idx) => {
-                        if (idx >= start && idx <= end) Sortable.utils.select(el);
+                        if (idx >= start && idx <= end) el.classList.add('selected');
                     });
                 } else if (e.ctrlKey || e.metaKey) {
-                    if (itemDiv.classList.contains('selected')) Sortable.utils.deselect(itemDiv);
-                    else Sortable.utils.select(itemDiv);
+                    itemDiv.classList.toggle('selected');
                     lastSelectedIndex = currentIndex;
                 } else {
-                    allItems.forEach(el => Sortable.utils.deselect(el));
-                    Sortable.utils.select(itemDiv);
+                    allItems.forEach(el => el.classList.remove('selected'));
+                    itemDiv.classList.add('selected');
                     lastSelectedIndex = currentIndex;
                 }
                 updateSelectedCount();
@@ -270,7 +275,29 @@
         });
         document.getElementById('total-pages').innerText = total;
         updateUndoButton();
-        updateSelectedCount();
+        initSortable(); // 목록 렌더링 후 드래그 다시 초기화
+    }
+
+    // 드래그 기능 초기화 함수
+    let sortableInstance;
+    function initSortable() {
+        const list = document.getElementById('file-list');
+        if (sortableInstance) sortableInstance.destroy();
+        
+        sortableInstance = new Sortable(list, {
+            multiDrag: true,
+            selectedClass: 'selected',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            dragClass: 'sortable-drag',
+            fallbackTolerance: 3, // 작은 움직임은 무시
+            onEnd: function() {
+                const newOrder = Array.from(list.children).map(el => el.dataset.id);
+                uploadedFiles = newOrder.map(id => uploadedFiles.find(f => f.id === id));
+                document.getElementById('auto-sort').checked = false;
+                renderFileList();
+            }
+        });
     }
 
     function updateSelectedCount() {
@@ -344,20 +371,6 @@
         list.classList.remove('cols-2', 'cols-3', 'cols-4');
         list.classList.add(`cols-${colVal}`);
     }
-
-    // SortableJS 초기화 (MultiDrag 플러그인 설정 포함)
-    new Sortable(document.getElementById('file-list'), {
-        multiDrag: true,
-        selectedClass: 'selected',
-        animation: 150,
-        ghostClass: 'sortable-ghost',
-        onEnd: function() {
-            const newOrder = Array.from(document.getElementById('file-list').children).map(el => el.dataset.id);
-            uploadedFiles = newOrder.map(id => uploadedFiles.find(f => f.id === id));
-            document.getElementById('auto-sort').checked = false;
-            renderFileList();
-        }
-    });
 
     document.getElementById('merge-execute-btn').onclick = async () => {
         if (uploadedFiles.length === 0) return alert('파일을 업로드해주세요.');
