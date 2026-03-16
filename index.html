@@ -84,12 +84,12 @@
 
         #file-list { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
 
-        /* 파일 아이템 스타일 */
         .file-item {
             background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
-            padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; transition: 0.2s;
+            padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; transition: 0.1s;
             cursor: grab; position: relative; user-select: none;
         }
+        /* 선택 및 드래그 하이라이트 */
         .file-item.selected { border-color: var(--primary-color); background-color: var(--primary-light); box-shadow: 0 0 0 2px var(--primary-color); z-index: 5; }
         .sortable-ghost { opacity: 0.5; background: var(--primary-light) !important; border: 2px dashed var(--primary-color) !important; }
 
@@ -178,6 +178,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     let uploadedFiles = [];
     let deletedStack = [];
+    let lastSelectedIndex = -1; // Shift 선택을 위한 변수
 
     function drawingSort(a, b) {
         const nameA = a.name.toLowerCase().replace(/\.pdf$/, '');
@@ -224,11 +225,12 @@
         const list = document.getElementById('file-list');
         list.innerHTML = '';
         let total = 0;
-        uploadedFiles.forEach(item => {
+        uploadedFiles.forEach((item, index) => {
             total += item.pageCount;
             const itemDiv = document.createElement('div');
             itemDiv.className = 'file-item';
             itemDiv.dataset.id = item.id;
+            itemDiv.dataset.index = index;
             itemDiv.innerHTML = `
                 <div class="file-info">
                     <div class="thumbnail-wrapper"><img src="${item.thumbnail}" class="thumbnail" style="transform: rotate(${item.rotation}deg)"></div>
@@ -239,13 +241,28 @@
                     <button class="action-btn" style="color:var(--danger-color)" onclick="event.stopPropagation(); deleteFile('${item.id}')"><i class="fa-solid fa-trash"></i></button>
                 </div>
             `;
-            // 클릭 시 선택 기능 (Shift 다중 선택 지원)
+            
+            // 고급 다중 선택 로직 (Ctrl, Shift 대응)
             itemDiv.onclick = (e) => {
-                if (e.shiftKey) {
-                    toggleSelect(itemDiv);
+                const currentIndex = parseInt(itemDiv.dataset.index);
+                const allItems = document.querySelectorAll('.file-item');
+
+                if (e.shiftKey && lastSelectedIndex !== -1) {
+                    // Shift: 범위 선택
+                    const start = Math.min(lastSelectedIndex, currentIndex);
+                    const end = Math.max(lastSelectedIndex, currentIndex);
+                    allItems.forEach((el, idx) => {
+                        if (idx >= start && idx <= end) el.classList.add('selected');
+                    });
+                } else if (e.ctrlKey || e.metaKey) {
+                    // Ctrl/Cmd: 개별 토글 선택
+                    itemDiv.classList.toggle('selected');
+                    lastSelectedIndex = currentIndex;
                 } else {
-                    document.querySelectorAll('.file-item').forEach(el => el.classList.remove('selected'));
+                    // 일반 클릭: 단일 선택
+                    allItems.forEach(el => el.classList.remove('selected'));
                     itemDiv.classList.add('selected');
+                    lastSelectedIndex = currentIndex;
                 }
                 updateSelectedCount();
             };
@@ -256,25 +273,17 @@
         updateSelectedCount();
     }
 
-    function toggleSelect(el) { el.classList.toggle('selected'); }
-
     function updateSelectedCount() {
         const count = document.querySelectorAll('.file-item.selected').length;
         const badge = document.getElementById('selected-count');
-        if (count > 1) {
-            badge.innerText = `${count}개 선택됨`;
-            badge.style.display = 'inline';
-        } else {
-            badge.style.display = 'none';
-        }
+        badge.innerText = `${count}개 선택됨`;
+        badge.style.display = count > 0 ? 'inline' : 'none';
     }
 
     function rotateFile(id) {
         const selectedEls = document.querySelectorAll('.file-item.selected');
         const targetIds = selectedEls.length > 0 && Array.from(selectedEls).some(el => el.dataset.id === id) 
-            ? Array.from(selectedEls).map(el => el.dataset.id) 
-            : [id];
-        
+            ? Array.from(selectedEls).map(el => el.dataset.id) : [id];
         targetIds.forEach(tid => {
             const item = uploadedFiles.find(f => f.id === tid);
             if(item) item.rotation = (item.rotation + 90) % 360;
@@ -285,22 +294,13 @@
     function deleteFile(id) {
         const selectedEls = document.querySelectorAll('.file-item.selected');
         const targetIds = selectedEls.length > 0 && Array.from(selectedEls).some(el => el.dataset.id === id) 
-            ? Array.from(selectedEls).map(el => el.dataset.id) 
-            : [id];
-        
+            ? Array.from(selectedEls).map(el => el.dataset.id) : [id];
         const removedBatch = [];
         targetIds.forEach(tid => {
             const idx = uploadedFiles.findIndex(f => f.id === tid);
-            if (idx > -1) {
-                removedBatch.push({ data: uploadedFiles[idx], index: idx });
-            }
+            if (idx > -1) removedBatch.push({ data: uploadedFiles[idx], index: idx });
         });
-
-        // 실제 삭제 (인덱스 역순으로 처리해야 꼬이지 않음)
-        removedBatch.sort((a, b) => b.index - a.index).forEach(item => {
-            uploadedFiles.splice(item.index, 1);
-        });
-
+        removedBatch.sort((a, b) => b.index - a.index).forEach(item => { uploadedFiles.splice(item.index, 1); });
         deletedStack.push(removedBatch);
         renderFileList();
         showToast(targetIds.length > 1 ? `${targetIds.length}개 파일 일괄 삭제됨` : `파일 삭제됨`);
@@ -309,9 +309,7 @@
     function undoDelete() {
         if (deletedStack.length > 0) {
             const batch = deletedStack.pop();
-            batch.sort((a, b) => a.index - b.index).forEach(item => {
-                uploadedFiles.splice(item.index, 0, item.data);
-            });
+            batch.sort((a, b) => a.index - b.index).forEach(item => { uploadedFiles.splice(item.index, 0, item.data); });
             renderFileList();
             showToast("복구 완료");
         }
@@ -338,8 +336,10 @@
         list.classList.add(`cols-${colVal}`);
     }
 
-    // SortableJS 초기화
+    // SortableJS 초기화 (MultiDrag 지원 및 하이라이트 고도화)
     new Sortable(document.getElementById('file-list'), {
+        multiDrag: true,
+        selectedClass: 'selected',
         animation: 150,
         ghostClass: 'sortable-ghost',
         onEnd: function() {
@@ -397,12 +397,10 @@
 
     document.getElementById('file-input').onchange = (e) => handleFiles(e.target.files);
     document.getElementById('folder-input').onchange = (e) => handleFiles(e.target.files);
-    
     const dz = document.getElementById('drop-zone');
     dz.ondragover = (e) => { e.preventDefault(); dz.style.background = "var(--primary-light)"; };
     dz.ondragleave = () => dz.style.background = "#fff";
     dz.ondrop = (e) => { e.preventDefault(); dz.style.background = "#fff"; handleFiles(e.dataTransfer.files); };
-    
     document.getElementById('auto-sort').onchange = (e) => { if(e.target.checked) { uploadedFiles.sort(drawingSort); renderFileList(); } };
 </script>
 </body>
